@@ -99,7 +99,7 @@ def extract_multimodal(pdf_path: Path, out_dir: Path) -> List[Element]:
 
 def save_jsonl(elements: List[Element], out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    with out_path.open("w", encoding="utf-8") as f:
+    with out_path.open("a", encoding="utf-8") as f:
         for el in elements:
             f.write(json.dumps(asdict(el), ensure_ascii=False) + "\n")
 
@@ -116,15 +116,15 @@ if __name__ == "__main__":
     for p in pdfs:
         img_dir = OUT_DIR / "images" / p.stem
         if img_dir.exists() and any(img_dir.iterdir()):
-            print(f"  ⏭️ Skipping: {p.name} (already extracted)")
+            print(f"  >> Skipping: {p.name} (already extracted)")
             continue
 
         print(f"  Extracting: {p.name}")
         els = extract_multimodal(p, OUT_DIR)
         all_elements.extend(els)
         counts = {t: sum(1 for e in els if e.element_type == t) for t in ("text", "table", "image")}
-        print(f"    → text:{counts['text']}  tables:{counts['table']}  images:{counts['image']}")
+        print(f"    -> text:{counts['text']}  tables:{counts['table']}  images:{counts['image']}")
 
     out = OUT_DIR / "elements.jsonl"
     save_jsonl(all_elements, out)
-    print(f"\n✅  {len(all_elements)} elements from {len(pdfs)} PDF(s) → {out}")
+    print(f"\nOK  {len(all_elements)} elements from {len(pdfs)} PDF(s) -> {out}")

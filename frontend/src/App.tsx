@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './index.css';
 
-import { fetchHealth, fetchPapers, fetchQuery, triggerIngest, fetchIngestStatus } from './api';
+import { fetchHealth, fetchPapers, fetchQuery, triggerIngest, fetchIngestStatus, uploadPdf } from './api';
 import type { ChatMessage, Paper, Source } from './types';
 
 // ── Sub-components ────────────────────────────────────────────────────────────
@@ -194,6 +194,19 @@ export default function App() {
     });
   };
 
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setIngestMsg(`Uploading ${files.length} file(s)...`);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        await uploadPdf(files[i]);
+      }
+      setIngestMsg(`Upload complete. Ready to index!`);
+    } catch (err: unknown) {
+      setIngestMsg(`Upload failed: ${err instanceof Error ? err.message : 'Unknown'}`);
+    }
+  };
+
   const sendMessage = async (overrideQ?: string | React.MouseEvent) => {
     const overrideText = typeof overrideQ === 'string' ? overrideQ : undefined;
     const q = (overrideText || input).trim();
@@ -309,13 +322,13 @@ export default function App() {
             className={`dropzone ${dragOver ? 'drag-over' : ''}`}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
-            onDrop={e => { e.preventDefault(); setDragOver(false); }}
+            onDrop={e => { e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
             onClick={() => fileRef.current?.click()}
             role="button" tabIndex={0}
           >
             <div className="dropzone-icon">📄</div>
-            Drop PDFs in <code style={{ fontSize: '0.72rem' }}>data/raw_pdfs/</code>
-            <input ref={fileRef} type="file" accept=".pdf" multiple style={{ display: 'none' }} />
+            Drop PDFs here to upload
+            <input ref={fileRef} type="file" accept=".pdf" multiple style={{ display: 'none' }} onChange={e => handleFiles(e.target.files)} />
           </div>
           <button className="btn btn-primary" onClick={handleIngest} disabled={!!jobId}>
             {jobId ? '⏳ Indexing…' : '🔄 Re-index All Papers'}

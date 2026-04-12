@@ -47,3 +47,18 @@ export async function fetchIngestStatus(jobId: string) {
   if (!r.ok) throw new Error('Failed to fetch job status');
   return r.json();
 }
+
+export async function uploadPdf(file: File): Promise<{ status: string }> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const r = await fetch(`${BASE}/upload`, {
+    method: 'POST',
+    body: formData,
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(err.detail ?? 'Upload failed');
+  }
+  return r.json();
+}
+

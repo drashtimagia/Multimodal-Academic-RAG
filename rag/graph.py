@@ -105,6 +105,7 @@ def query_rewriter(state: RAGState) -> RAGState:
             "You are a query rewriting expert for academic research papers. "
             "Rewrite the user's question to be more specific and retrieval-friendly "
             "for searching across research paper text, tables, and figures. "
+            "If the user is asking for a citation or authors, rewrite the query to search for 'authors, title, citation, publication details'. "
             "If relevant, take their chat history into account to resolve pronouns. "
             "Output ONLY the rewritten question."
         )),
@@ -112,21 +113,22 @@ def query_rewriter(state: RAGState) -> RAGState:
     ])
     return {**state, "rewritten_q": resp.content.strip()}
 
-
 def retriever(state: RAGState) -> RAGState:
     vs    = _get_vectorstore()
     query = state.get("rewritten_q") or state["question"]
 
     # Apply paper filter if specified
-    where = None
     papers = [p for p in state.get("paper_filter", []) if p]
-    if len(papers) == 1:
-        where = {"source": papers[0]}
-    elif len(papers) > 1:
-        where = {"source": {"$in": papers}}
+    docs = []
 
-    if where:
-        docs = vs.similarity_search(query, k=TOP_K, filter=where)
+    if len(papers) == 1:
+        docs = vs.similarity_search(query, k=TOP_K, filter={"source": papers[0]})
+    elif len(papers) > 1:
+        # Retrieve best matching chunks from EACH selected paper to prevent one paper from dominating
+        k_per_paper = max(2, TOP_K // len(papers))
+        for p in papers:
+            paper_docs = vs.similarity_search(query, k=k_per_paper, filter={"source": p})
+            docs.extend(paper_docs)
     else:
         docs = vs.similarity_search(query, k=TOP_K)
 
@@ -152,10 +154,13 @@ def doc_grader(state: RAGState) -> RAGState:
             graded.append(doc)
 
     retries = state.get("retries", 0)
-    if not graded and retries < MAX_RETRIES:
-        return {**state, "graded_docs": [], "rewritten_q": "", "retries": retries + 1}
+    if not graded:
+        if retries < MAX_RETRIES:
+            return {**state, "graded_docs": [], "rewritten_q": "", "retries": retries + 1}
+        else:
+            return {**state, "graded_docs": state["documents"], "retries": retries + 1}
 
-    return {**state, "graded_docs": graded if graded else state["documents"]}
+    return {**state, "graded_docs": graded, "retries": retries}
 
 
 def generator(state: RAGState) -> RAGState:
@@ -174,6 +179,9 @@ def generator(state: RAGState) -> RAGState:
             "Synthesize the information seamlessly. "
             "Do NOT mention internal terms like 'Chunk', 'Document', or the structure of this prompt. "
             "If citing facts, refer naturally to the paper's name or its authors.\n\n"
+            "CRITICAL: If the user asks for a citation, or whenever you are formatting a formal citation of the paper(s), "
+            "you MUST use strict APA format (Author, A. A. (Year). Title. Journal, etc.). "
+            "If specific author names or years are missing, attempt to extract them from the provided text, or use APA placeholders.\n\n"
             "CRITICAL: At the very end of your response, on a new line, you MUST provide 3 insightful follow-up questions "
             "that the user has not asked yet, based on the context. Format exactly as this array:\n"
             "SUGGESTED_QUESTIONS: [\"Question 1?\", \"Question 2?\", \"Question 3?\"]"

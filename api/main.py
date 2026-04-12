@@ -25,7 +25,7 @@ from typing import Literal, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -127,6 +127,8 @@ def run_ingestion_pipeline(job_id: str) -> None:
             [python, str(script)],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             cwd=str(PROJECT_ROOT),
         )
         job["log"] += r.stdout
@@ -178,8 +180,8 @@ def startup():
     scheduler.add_job(scheduled_ingest, "cron", hour=hour, minute=minute)
     scheduler.start()
 
-    print(f"✅  LangGraph RAG pipeline ready")
-    print(f"✅  APScheduler: nightly ingest at {hour:02d}:{minute:02d} UTC")
+    print(f"OK  LangGraph RAG pipeline ready")
+    print(f"OK  APScheduler: nightly ingest at {hour:02d}:{minute:02d} UTC")
 
 
 @app.on_event("shutdown")
@@ -324,4 +326,21 @@ def list_papers():
         "count": len(papers),
         "papers": sorted(papers.values(), key=lambda p: p["source"]),
     }
+
+
+@app.post("/upload")
+async def upload_pdf(file: UploadFile = File(...)):
+    """Upload a PDF directly into the data/raw_pdfs directory."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    
+    upload_dir = PROJECT_ROOT / "data" / "raw_pdfs"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    
+    file_path = upload_dir / file.filename
+    with open(file_path, "wb") as buffer:
+        import shutil
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"filename": file.filename, "status": "uploaded", "message": "File uploaded successfully."}
 
