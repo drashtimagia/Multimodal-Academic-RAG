@@ -1,5 +1,6 @@
 # 📚 Multimodal Academic Research RAG
 
+
 A production-grade, full-stack Retrieval-Augmented Generation (RAG) system designed specifically for interacting with academic research papers. It ingests PDFs, extracts structured data (Text, Tables, and Images via OCR), and allows you to chat with your research using an advanced LangGraph reasoning engine powered by Groq's high-speed LLaMA 3.3.
 
 ## ✨ Key Features
